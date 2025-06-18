@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # Claude automation service
+  claude-automation:
+    build:
+      context: ./docker/claude
+      dockerfile: Dockerfile
+    container_name: claude-automation
+    volumes:
+      # Persistent volume for Claude authentication
+      - claude-auth-data:/app/claude-config
+      # Logs directory
+      - claude-logs:/app/logs
+      # Optional: Mount your project directory for automation tasks
+      # - ./your-project:/app/workspace/your-project
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - NODE_ENV=production
+      # Git repository configuration
+      - GIT_REPO_URL=${GIT_REPO_URL}
+      - GIT_BRANCH=${GIT_BRANCH:-main}
+      # Claude automation configuration
+      - CLAUDE_PROMPT=${CLAUDE_PROMPT}
+      - AUTOMATION_INTERVAL=${AUTOMATION_INTERVAL:-60}
+      # Git configuration
+      - GIT_USER_NAME=${GIT_USER_NAME:-Claude Automation}
+      - GIT_USER_EMAIL=${GIT_USER_EMAIL:-claude@automation.local}
+    restart: unless-stopped
+    networks:
+      - automation-network
+
+  # Discord bot service
+  discord-bot:
+    build:
+      context: ./docker/discord-bot
+      dockerfile: Dockerfile
+    container_name: discord-bot
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - automation-network
+    depends_on:
+      - redis  # Optional: for rate limiting/caching
+
+  # Optional: Redis for caching/rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    volumes:
+      - redis-data:/data
+    networks:
+      - automation-network
+    restart: unless-stopped
+
+volumes:
+  claude-auth-data:
+    name: claude-auth-data
+  claude-logs:
+    name: claude-logs
+  redis-data:
+    name: redis-data
+
+networks:
+  automation-network:
+    driver: bridge
